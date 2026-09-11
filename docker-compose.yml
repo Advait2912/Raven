@@ -1,0 +1,15 @@
+services:
+  raven:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: raven-platform
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=gemma4:31b-cloud
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
