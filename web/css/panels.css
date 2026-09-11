@@ -1,0 +1,66 @@
+/* Panel containers and tab styling for RAVEN Dashboard */
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  backdrop-filter: blur(16px);
+  transition: border-color 0.2s ease;
+}
+
+.panel:hover {
+  border-color: var(--border-active);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-indicator {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--color-cyan);
+  background: rgba(0, 240, 255, 0.1);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+}
+
+/* Tabs */
+.tab-group {
+  display: flex;
+  gap: 6px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--color-cyan);
+  border-color: var(--color-cyan);
+}

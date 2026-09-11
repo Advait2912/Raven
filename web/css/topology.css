@@ -1,0 +1,78 @@
+/* Target Topology Diagram styling for RAVEN Dashboard */
+
+.topology-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 8px;
+}
+
+.topo-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  width: 120px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.topo-node.active {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.2);
+}
+
+.topo-node.compromised {
+  border-color: var(--color-rose);
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.25);
+}
+
+.node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  color: var(--color-cyan);
+}
+.node-icon svg {
+  display: block;
+}
+.node-name { font-size: 12px; font-weight: 600; }
+.node-sub { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.topo-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border-subtle);
+  position: relative;
+  margin: 0 6px;
+}
+
+.topo-connector.active {
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-purple));
+}
+
+.packet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-cyan);
+  position: absolute;
+  top: -2px;
+  left: 0;
+  display: none;
+}
+
+.topo-connector.active .packet {
+  display: block;
+  animation: travel 1.5s infinite linear;
+}
+
+@keyframes travel {
+  0% { left: 0%; opacity: 0; }
+  50% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}

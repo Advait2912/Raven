@@ -1,0 +1,38 @@
+/* Burp-Style Traffic Inspector styling for RAVEN Dashboard */
+
+.inspector-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  height: 230px;
+}
+
+.inspector-box {
+  display: flex;
+  flex-direction: column;
+  background: #05080f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.box-title {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.code-viewer {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #a5b4fc;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  flex: 1;
+}
