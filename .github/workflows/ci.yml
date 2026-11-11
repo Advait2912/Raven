@@ -1,0 +1,124 @@
+name: RAVEN CI
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} Tests & Smoke Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && pip install pytest requests
+
+      - name: Syntax check
+        run: python -m compileall -q raven attack tests
+
+      - name: Run unit & integration tests
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -v
+
+      - name: Run standalone IDOR attack check
+        env:
+          PYTHONPATH: .
+        run: python -m attack.idor
+
+      - name: Smoke test HTTP server & REST API
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m raven.main --host 127.0.0.1 --port 8000 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+
+          python - <<'EOF'
+          import json
+          import time
+          import urllib.request
+
+          base = "http://127.0.0.1:8000"
+
+          for _ in range(20):
+              try:
+                  with urllib.request.urlopen(f"{base}/api/health", timeout=1) as r:
+                      if r.status == 200:
+                          break
+              except Exception:
+                  time.sleep(0.25)
+          else:
+              raise RuntimeError("Server did not become healthy in time")
+
+          def req(method, path, body=None):
+              data = json.dumps(body).encode() if body is not None else None
+              headers = {"Content-Type": "application/json"} if data is not None else {}
+              r = urllib.request.Request(f"{base}{path}", data=data, headers=headers, method=method)
+              with urllib.request.urlopen(r, timeout=5) as resp:
+                  return resp.status, resp.read().decode("utf-8")
+
+          status, html = req("GET", "/")
+          assert status == 200 and "RAVEN" in html
+
+          status, raw = req("GET", "/api/health")
+          assert status == 200 and json.loads(raw)["status"] == "online"
+
+          status, raw = req("POST", "/api/demo/run")
+          run_vuln = json.loads(raw)
+          assert run_vuln["result"]["success"] is True
+          assert run_vuln["result"]["status"] == "VULNERABILITY_CONFIRMED"
+
+          status, raw = req("GET", "/api/demo/explain")
+          assert status == 200 and "E01" in json.loads(raw)["explanation"]
+
+          status, raw = req("GET", "/api/demo/remediation")
+          assert status == 200 and "owner_id" in json.loads(raw)["secure"]
+
+          status, raw = req("POST", "/api/demo/patch", {"is_vulnerable": False})
+          assert json.loads(raw)["is_vulnerable"] is False
+
+          status, raw = req("POST", "/api/demo/run")
+          run_patched = json.loads(raw)
+          assert run_patched["result"]["success"] is False
+          assert run_patched["result"]["status"] == "VULNERABILITY_NOT_DETECTED"
+
+          print("HTTP server & REST API smoke checks passed.")
+          EOF
+
+  docker:
+    name: Docker Build & Container Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t raven:ci .
+
+      - name: Run pytest inside Docker container
+        run: docker run --rm --entrypoint python raven:ci -m pytest -v
+
