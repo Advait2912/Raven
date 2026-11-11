@@ -28,7 +28,8 @@ class DemoController:
         if preserve_patch:
             self.target.is_vulnerable = prev_patch
         self.evidence_store.clear()
-        self.policy_gate = PolicyGate(Scope())
+        if not preserve_patch:
+            self.policy_gate.scope.current_requests = 0
         self.current_step = 0
         self.last_result = None
         self.session_token = ""

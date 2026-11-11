@@ -2,6 +2,7 @@
 # Design choice: hard code-level enforcement. A prompt is not a firewall.
 # All proposed attack executions must pass this gate before touching the target.
 
+import posixpath
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -38,15 +39,33 @@ class PolicyGate:
         satisfied_prerequisites: list[str],
     ) -> PolicyDecision:
         # Check domain scope
-        if target_domain not in self.scope.allowed_domains:
+        if not target_domain or target_domain not in self.scope.allowed_domains:
             return PolicyDecision(
                 allowed=False,
                 reason=f"Domain '{target_domain}' is out of authorized scope.",
                 action_id=action_id,
             )
 
-        # Check path scope
-        if not any(target_path.startswith(p) for p in self.scope.allowed_paths):
+        # Check path scope with normalization to block traversal and prefix spoofing
+        clean_path = target_path.split("?", 1)[0].split("#", 1)[0]
+        if (
+            not clean_path.startswith("/")
+            or "\\" in clean_path
+            or "\x00" in clean_path
+            or ".." in clean_path.split("/")
+        ):
+            return PolicyDecision(
+                allowed=False,
+                reason=f"Path '{target_path}' is outside declared permitted paths.",
+                action_id=action_id,
+            )
+
+        normalized_path = posixpath.normpath(clean_path)
+        if not any(
+            normalized_path == allowed.rstrip("/")
+            or normalized_path.startswith(allowed.rstrip("/") + "/")
+            for allowed in self.scope.allowed_paths
+        ):
             return PolicyDecision(
                 allowed=False,
                 reason=f"Path '{target_path}' is outside declared permitted paths.",

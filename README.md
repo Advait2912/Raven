@@ -87,6 +87,7 @@ Raven/
 │   ├── test_idor.py         # IDOR detection on vulnerable vs. patched target
 │   ├── test_policy.py       # PolicyGate allow, domain scope, and prerequisite checks
 │   ├── test_routes.py       # DemoController full and step-by-step execution tests
+│   ├── test_security.py     # Security boundary, traversal, budget & false-positive tests
 │   └── test_target.py       # VulnerableLabTarget health, auth, leak, and 403 patch tests
 ├── web/
 │   ├── css/                 # Modular stylesheets (variables, layout, panels, topology, inspector, evidence)
@@ -95,8 +96,10 @@ Raven/
 │   │   ├── components.js    # UI renderers for HTTP traffic, evidence, findings, topology, diffs
 │   │   └── app.js           # Dashboard event wiring & step/patch state management
 │   └── index.html           # Single-page interactive RAVEN dashboard
-├── Dockerfile               # Python 3.12-slim container (non-root `raven` user, port 8000)
-└── docker-compose.yml       # Service definition with host.docker.internal Ollama wiring
+├── Dockerfile               # Python 3.12-slim container (non-root `raven` user, /api/health check)
+├── docker-compose.yml       # Service definition with host.docker.internal Ollama wiring
+├── requirements.txt         # Production runtime dependencies (stdlib-only today)
+└── requirements-dev.txt     # Development & CI test dependencies (pytest)
 ```
 
 ---
@@ -206,12 +209,13 @@ Test coverage across `tests/`:
 - `tests/test_policy.py` — Scope allow, out-of-scope domain rejection, and missing prerequisite rejection.
 - `tests/test_target.py` — Lab health, login authentication, order `102` leak, and `403 Forbidden` patch enforcement.
 - `tests/test_routes.py` — `DemoController` full vulnerable run, full patched run, and 3-step patched run.
+- `tests/test_security.py` — Security boundary tests (out-of-scope domains, path traversal & prefix spoofing, request budget limits, false-positive prevention, unauthenticated/unsupported HTTP methods, and fail-closed `DemoController`).
 
 ### CI/CD (GitHub Actions)
-- **CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))**: Runs on every pull request and push to `main`/`master`:
-  - Syntax compilation check (`compileall`), `pytest` across Python `3.11` and `3.12`, standalone `attack.idor` check, and live HTTP server + REST API smoke test.
-  - Builds the Docker image and runs `pytest` inside the container.
-- **CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml))**: On pushes to `main`/`master`, version tags (`v*`), or manual dispatch, verifies `pytest` and publishes the container image to GitHub Container Registry (`ghcr.io`).
+- **CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))**: Runs on pull requests, pushes to `main`/`master`, and via `workflow_call`:
+  - Installs `requirements-dev.txt`, runs syntax checks (`compileall`), runs `pytest` across Python `3.11` and `3.12`, runs standalone `attack.idor`, and runs a live HTTP server + REST API smoke test.
+  - Builds the Docker image, runs `pytest` inside the container, and verifies `/api/health` on the running container.
+- **CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml))**: On pushes to `main`/`master`, `v*` release tags, or manual dispatch, invokes the full reusable CI workflow (`workflow_call`) before publishing SHA-pinned container images to GitHub Container Registry (`ghcr.io`) with least-privilege `packages: write` scoped strictly to the publish job.
 
 ---
 

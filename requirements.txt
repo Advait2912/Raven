@@ -1,0 +1,3 @@
+# Runtime dependencies for RAVEN.
+# Currently RAVEN runs on Python 3.11+ standard library only.
+# Add production dependencies (e.g., fastapi, uvicorn, pydantic) here as the platform grows.
