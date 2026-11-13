@@ -35,7 +35,7 @@ class RedactionPipeline:
 
     # Sensitive key patterns in dictionaries/JSON (case-insensitive)
     SENSITIVE_KEY_REGEX = re.compile(
-        r"(?i)^(.*_)?(password|passwd|pwd|secret|token|api_?key|auth_?token|access_?token|refresh_?token|private_?key|credit_?card|ssn)(_.*)?$"
+        r"(?i)^(.*_)?(password|passwd|pwd|secret|token|api_?key|auth_?token|access_?token|refresh_?token|private_?key|credit_?card|card_number|ssn|social_security_number)(_.*)?$"
     )
 
     # String patterns to match anywhere in body or raw payload
@@ -124,8 +124,14 @@ class RedactionPipeline:
                 for k, v in data.items():
                     k_str = str(k)
                     if cls.SENSITIVE_KEY_REGEX.match(k_str):
-                        # Mask sensitive values deterministically
-                        if isinstance(v, str) and len(v) > 0:
+                        # Preserve benign nulls, booleans, and already masked values
+                        if v is None:
+                            cleaned_dict[k] = None
+                        elif isinstance(v, bool):
+                            cleaned_dict[k] = v
+                        elif isinstance(v, str) and (all(c == "*" for c in v) or v.startswith("****") or v in ("[REDACTED]", "[MASKED]")):
+                            cleaned_dict[k] = v
+                        elif isinstance(v, str) and len(v) > 0:
                             digest = hashlib.sha256(v.encode("utf-8")).hexdigest()[:8]
                             cleaned_dict[k] = f"[REDACTED:{k_str.upper()}:{digest}]"
                         else:

@@ -155,10 +155,12 @@ class NetworkGateway:
         body: Optional[Any] = None,
         timeout: float = 10.0,
         max_redirects: int = 5,
+        max_body_bytes: int = 1_048_576,
     ) -> NetworkResponse:
         """Execute HTTP request directly against the validated IP to defeat DNS rebinding.
 
-        Follows redirects with full re-validation at every hop.
+        Follows redirects with full re-validation at every hop. Response body is bounded
+        by max_body_bytes (default 1MB).
         """
         method_upper = method.upper().strip()
         if method_upper not in [m.upper() for m in self.scope.allowed_methods]:
@@ -215,7 +217,7 @@ class NetworkGateway:
                 resp = conn.getresponse()
                 resp_status = resp.status
                 resp_headers = {k.lower(): v for k, v in resp.getheaders()}
-                resp_body_bytes = resp.read()
+                resp_body_bytes = resp.read(max_body_bytes)
                 conn.close()
 
                 resp_body_text = resp_body_bytes.decode("utf-8", errors="replace")
