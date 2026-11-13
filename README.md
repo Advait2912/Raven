@@ -57,6 +57,7 @@ RavenRequestHandler & DemoController (raven/server/)
 
 ```text
 Raven/
+├── .agents/                 # Developer and agent skills (architecture, attack modules, policy, testing)
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml           # PR & push CI (Python 3.11/3.12 pytest, smoke test, Docker test)
@@ -65,7 +66,7 @@ Raven/
 │   ├── base.py              # AttackModule abstract base class
 │   └── idor.py              # IDORAttack module (also runnable via python -m attack.idor)
 ├── docs/
-│   └── arch.md              # Full platform architecture, research thesis, & evaluation design
+│   └── RAVEN_V1_Technical_Specification.md  # Comprehensive V1 technical specification & system design
 ├── raven/
 │   ├── ai/
 │   │   ├── ollama.py        # Ollama HTTP client with Docker/WSL/localhost host detection
@@ -229,11 +230,18 @@ Test coverage across `tests/`:
 
 ---
 
-## Roadmap (Planned in `docs/arch.md`)
+## Roadmap (Planned in `docs/RAVEN_V1_Technical_Specification.md`)
 
-The full architecture specification in `docs/arch.md` outlines upcoming phases beyond the current IDOR vertical slice:
+The comprehensive technical specification in `docs/RAVEN_V1_Technical_Specification.md` outlines upcoming phases beyond the current IDOR vertical slice:
 - **Additional Attack Modules**: SQL Injection, XSS, Authentication flaws, API authorization, and SSRF.
 - **Mode A (Attack Simulation) & Mode C (Authorized Live Pentesting)**: Expanding beyond the in-memory lab to simulated scenarios and explicitly scoped live targets.
 - **AI Pentest Agent & Analyst Roles**: Constrained next-attack selection from an explicit action catalog with abstention states (`NEEDS_RECON`, `INSUFFICIENT_EVIDENCE`, `STOP`) and auditable decision logs.
 - **Trustworthiness Evaluation Harness**: Benchmark suite and error taxonomy comparing unconstrained LLMs against evidence-grounded, policy-gated, and deterministically validated configurations.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local environment setup, testing guidelines, and PR workflow.
+For system architecture and implementation guides, refer to the [`.agents/`](.agents/) skill library.
 
