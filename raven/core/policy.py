@@ -12,8 +12,10 @@ class Scope:
     """Explicit boundaries for authorized testing."""
     allowed_domains: list[str] = field(default_factory=lambda: ["localhost", "127.0.0.1", "lab.local"])
     allowed_paths: list[str] = field(default_factory=lambda: ["/api/auth/login", "/api/orders/"])
+    allowed_methods: list[str] = field(default_factory=lambda: ["GET", "POST", "HEAD", "OPTIONS"])
     max_requests: int = 50
     current_requests: int = 0
+    allow_loopback: bool = True  # True for local dev / lab mode; False for external pentesting
 
 
 @dataclass
@@ -37,7 +39,18 @@ class PolicyGate:
         target_domain: str,
         prerequisites: list[str],
         satisfied_prerequisites: list[str],
+        http_method: Optional[str] = None,
     ) -> PolicyDecision:
+        # Check HTTP method if supplied
+        if http_method:
+            method_upper = http_method.upper().strip()
+            if method_upper not in [m.upper() for m in self.scope.allowed_methods]:
+                return PolicyDecision(
+                    allowed=False,
+                    reason=f"HTTP method '{method_upper}' is not permitted by scope.",
+                    action_id=action_id,
+                )
+
         # Check domain scope
         if not target_domain or target_domain not in self.scope.allowed_domains:
             return PolicyDecision(

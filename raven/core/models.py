@@ -4,7 +4,21 @@
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Optional
+
+
+class FindingStatus(str, Enum):
+    """Deterministic 5-state lifecycle for vulnerability findings.
+
+    Only deterministic FindingValidator code paths may transition states.
+    AI components NEVER transition finding states.
+    """
+    NOT_TESTED = "NOT_TESTED"
+    NOT_DETECTED = "NOT_DETECTED"
+    UNCONFIRMED = "UNCONFIRMED"
+    CONFIRMED = "CONFIRMED"
+    INVALIDATED = "INVALIDATED"
 
 
 @dataclass
@@ -26,6 +40,7 @@ class Evidence:
     """A verified evidence item with a stable identifier (e.g. E01, E02).
 
     Grounds all findings in concrete HTTP interactions and system state.
+    Cryptographically chained via HMAC-SHA256 and redacted before storage.
     """
     id: str
     evidence_type: str
@@ -41,6 +56,15 @@ class Evidence:
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    # V1 Extensions
+    assessment_id: str = "default"
+    response_headers: dict[str, str] = field(default_factory=dict)
+    chain_hash: Optional[str] = None
+    recorded_at: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.recorded_at is None:
+            self.recorded_at = self.timestamp
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -54,10 +78,47 @@ class Finding:
     severity: str
     endpoint: str
     evidence_ids: list[str]
-    confirmed: bool
-    impact: str
-    root_cause: str
-    remediation: str
+    confirmed: bool = True
+    impact: str = ""
+    root_cause: str = ""
+    remediation: str = ""
+    # V1 Extensions
+    status: FindingStatus = FindingStatus.CONFIRMED
+    confidence: float = 1.0
+    cwe_id: Optional[str] = None
+    cvss_score: Optional[float] = None
+    assessment_id: str = "default"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.status, str):
+            try:
+                self.status = FindingStatus(self.status)
+            except ValueError:
+                self.status = FindingStatus.CONFIRMED if self.confirmed else FindingStatus.NOT_DETECTED
+        # Keep confirmed flag in sync
+        if self.status == FindingStatus.CONFIRMED:
+            self.confirmed = True
+        elif self.status in (FindingStatus.NOT_DETECTED, FindingStatus.INVALIDATED):
+            self.confirmed = False
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["status"] = self.status.value if isinstance(self.status, FindingStatus) else str(self.status)
+        return d
+
+
+@dataclass
+class ScopeViolation:
+    """Record of an attempted request that was blocked by security controls."""
+    id: str
+    violation_type: str  # DOMAIN_OUT_OF_SCOPE | PRIVATE_IP | BUDGET_EXCEEDED | DNS_REBINDING | METHOD_NOT_ALLOWED | PATH_NOT_ALLOWED
+    attempted_target: str
+    blocked_by: str       # PolicyGate | NetworkGateway
+    details: str = ""
+    assessment_id: str = "default"
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
