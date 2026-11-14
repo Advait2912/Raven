@@ -1,21 +1,43 @@
-# AI Tutor & Security Analyst.
-# Follows Section 8 of arch.md: Grounded in empirical evidence, explains root causes,
-# provides progressive hints, and offers deterministic remediation patches.
+"""AI Tutor & Security Analyst for RAVEN Trustworthy AI.
 
-from typing import Any, Optional
+Follows Section 8 of arch.md:
+- Grounded strictly in empirical evidence (EvidenceGrounder)
+- Safety and schema verified deterministically (AIOutputVerifier)
+- Confidence calibrated mathematically (ConfidenceAnnotator)
+- Progressive educational guidance with pacing constraints (ProgressiveHintEngine)
+"""
+
+from typing import Any, List, Optional
 from raven.core.models import Evidence, Finding
+from .confidence import ConfidenceAnnotator, ConfidenceResult
+from .grounder import EvidenceGrounder, GroundingResult, GroundingStatus
+from .hints import HintResult, ProgressiveHintEngine
 from .ollama import OllamaClient
+from .verifier import AIOutputVerifier, VerificationResult
 
 
 class AITutor:
-    """Tutor and analyst providing grounded explanations and progressive learning hints."""
+    """Tutor and analyst providing verified, grounded explanations and progressive hints."""
 
-    def __init__(self, ollama_client: Optional[OllamaClient] = None) -> None:
+    def __init__(
+        self,
+        ollama_client: Optional[OllamaClient] = None,
+        grounder: Optional[EvidenceGrounder] = None,
+        verifier: Optional[AIOutputVerifier] = None,
+        annotator: Optional[ConfidenceAnnotator] = None,
+        hint_engine: Optional[ProgressiveHintEngine] = None,
+    ) -> None:
         self.ollama = ollama_client or OllamaClient()
+        self.grounder = grounder or EvidenceGrounder()
+        self.verifier = verifier or AIOutputVerifier()
+        self.annotator = annotator or ConfidenceAnnotator()
+        self.hint_engine = hint_engine or ProgressiveHintEngine()
 
     def get_progressive_hint(self, level: int) -> dict[str, str]:
-        """Return progressive hints without immediately spoiling solutions."""
-        hints = {
+        """Return progressive hints without immediately spoiling solutions (legacy/simple API)."""
+        hint = self.hint_engine.get_hint(tier=level, session_id="legacy")
+        # If locked under strict pacing, provide the template for backward compatibility in legacy API
+        hints_backup = {
             1: {
                 "title": "Hint 1: Parameter Analysis",
                 "content": "Look closely at the request URI `/api/orders/{id}`. The `{id}` path parameter is a direct reference to a database object identifier. Does the application restrict which IDs an authenticated user can request?",
@@ -29,7 +51,22 @@ class AITutor:
                 "content": "Broken Object-Level Authorization (IDOR). The backend retrieves the order record solely based on the user-supplied identifier without validating whether `order.owner_id == session.user_id`.",
             },
         }
-        return hints.get(level, hints[1])
+        if hint.unlocked:
+            return {"title": hint.title, "content": hint.content}
+        return hints_backup.get(level, hints_backup[1])
+
+    def request_student_hint(
+        self,
+        tier: int,
+        session_id: str = "default",
+        evidence_list: Optional[list[Evidence]] = None,
+    ) -> HintResult:
+        """Request progressive student hint with strict pacing and prerequisite enforcement."""
+        return self.hint_engine.get_hint(
+            tier=tier,
+            session_id=session_id,
+            evidence_list=evidence_list,
+        )
 
     def explain_finding(
         self,
@@ -37,25 +74,50 @@ class AITutor:
         evidence_list: list[Evidence],
         use_llm: bool = True,
     ) -> dict[str, Any]:
-        """Explain the confirmed finding, citing exact evidence IDs."""
-        ev_summary = "\n".join(
-            f"- [{ev.id}] {ev.request_method} {ev.request_path} -> HTTP {ev.response_status} (Actor: {ev.authenticated_actor}, Owner: {ev.resource_owner})"
-            for ev in evidence_list
-        )
-
+        """Explain the confirmed finding, citing exact evidence IDs with verification and confidence."""
         llm_response = None
+        model_name = "deterministic-rules-engine"
+        verification_passed = True
+        verification_violations: list[str] = []
+
         if use_llm and self.ollama.is_available():
-            prompt = (
-                f"You are the RAVEN AI Security Tutor. Explain this finding based strictly on the evidence below.\n"
-                f"Finding: {finding.vulnerability_type} on {finding.endpoint}\n"
-                f"Evidence:\n{ev_summary}\n\n"
-                f"Provide: 1) What happened citing evidence IDs, 2) Impact, 3) How to fix."
+            prompt = self.grounder.bind_prompt(
+                finding=finding,
+                evidence_list=evidence_list,
+                instruction=(
+                    "Provide: 1) What happened citing evidence IDs, 2) Impact, 3) How to fix. "
+                    "You must strictly reference the provided evidence IDs."
+                ),
             )
-            llm_response = self.ollama.generate(
+            raw_generation = self.ollama.generate(
                 prompt=prompt,
                 system_prompt="You are a trustworthy AI cybersecurity instructor. Ground all explanations in cited Evidence IDs.",
             )
 
+            if raw_generation:
+                model_name = self.ollama.model
+                # Step 1: AIOutputVerifier (deterministic safety firewall & prohibited patterns)
+                ver_res = self.verifier.verify(raw_generation)
+                verification_passed = ver_res.is_valid
+                verification_violations = ver_res.violations
+
+                if ver_res.is_valid:
+                    # Step 2: EvidenceGrounder citation check
+                    grounding = self.grounder.validate_citations(ver_res.output, evidence_list)
+                    if grounding.status == GroundingStatus.UNGROUNDED:
+                        # Fail-closed: ungrounded critical assertions rejected
+                        llm_response = (
+                            f"AI response rejected by EvidenceGrounder: {grounding.reason}. "
+                            f"Fail-closed fallback activated."
+                        )
+                        verification_passed = False
+                    else:
+                        llm_response = grounding.sanitized_text or ver_res.output
+                else:
+                    # Output verifier rejected dangerous commands or out-of-scope targets
+                    llm_response = ver_res.output
+
+        # Deterministic fallback if LLM is unavailable or rejected
         explanation = llm_response or (
             f"IDOR (Insecure Direct Object Reference) confirmed on endpoint `{finding.endpoint}`.\n\n"
             f"**Evidence Grounding:**\n"
@@ -65,13 +127,34 @@ class AITutor:
             f"**Root Cause:**\n{finding.root_cause}"
         )
 
+        # Grounding evaluation for final response
+        grounding_eval = self.grounder.validate_citations(explanation, evidence_list)
+
+        # Count claims requiring grounding (empirical/critical claims)
+        critical_count = sum(1 for c in grounding_eval.claims if c.is_critical)
+        claims_for_confidence = critical_count if critical_count > 0 else grounding_eval.total_claims
+
+        # Confidence calibration
+        confidence_result = self.annotator.calibrate(
+            verified_citations=grounding_eval.verified_citations,
+            total_claims=claims_for_confidence,
+            evidence_list=evidence_list,
+            finding=finding,
+        )
+
         return {
             "finding_id": finding.id,
             "vulnerability": finding.vulnerability_type,
             "severity": finding.severity,
-            "evidence_cited": finding.evidence_ids,
+            "evidence_cited": grounding_eval.verified_citations or finding.evidence_ids,
             "explanation": explanation,
-            "model_used": self.ollama.model if llm_response else "deterministic-rules-engine",
+            "confidence": confidence_result.confidence,
+            "grounding_status": grounding_eval.status.value,
+            "is_grounded": grounding_eval.is_grounded,
+            "verification_passed": verification_passed,
+            "violations": verification_violations,
+            "confidence_report": confidence_result.to_dict(),
+            "model_used": model_name,
         }
 
     def get_remediation_diff(self) -> dict[str, str]:
