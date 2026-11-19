@@ -92,12 +92,13 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
             sess = query.get("session_id", ["default"])[0]
             hint = controller.tutor.request_student_hint(tier=tier, session_id=sess, evidence_list=controller.evidence_store.get_all_evidence())
             self._send_json({
-                "tier": hint.tier.value if hasattr(hint.tier, "value") else str(hint.tier),
+                "tier": hint.tier,
+                "tier_name": hint.tier_name,
                 "title": hint.title,
                 "content": hint.content,
                 "unlocked": hint.unlocked,
-                "cooldown_remaining_sec": hint.cooldown_remaining_sec,
-                "reason": hint.reason,
+                "cooldown_remaining": hint.cooldown_remaining,
+                "message": hint.message,
             })
             return
 

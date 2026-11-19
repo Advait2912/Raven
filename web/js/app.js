@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.target.classList.add('active');
       const hint = await RavenAPI.getStudentHint(lvl);
       document.getElementById('hint-title').textContent = hint.title || `Tier ${lvl} Guidance`;
-      document.getElementById('hint-text').textContent = hint.content || hint.reason;
+      document.getElementById('hint-text').textContent = hint.content || hint.message || 'Hint locked or unavailable.';
     });
   });
 
