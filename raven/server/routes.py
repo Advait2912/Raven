@@ -1,7 +1,15 @@
 # Demo state manager and route controllers.
-# Handles interactive step-by-step attack execution, policy checks, and evidence queries.
+# Handles multi-module assessments, interactive step-by-step attack execution,
+# policy checks, evidence queries, and report generation for V1.
 
-from typing import Any
+import json
+from datetime import datetime, timezone
+from typing import Any, Optional
+from attack.cors import CORSMisconfigurationModule
+from attack.disclosure import InformationDisclosureModule
+from attack.exposure import ExcessiveDataExposureModule
+from attack.fingerprint import TechnologyFingerprintModule
+from attack.headers import SecurityHeadersModule
 from attack.idor import IDORAttack
 from raven.ai.tutor import AITutor
 from raven.core.policy import PolicyGate, Scope
@@ -10,17 +18,24 @@ from raven.target.lab import VulnerableLabTarget
 
 
 class DemoController:
-    """Manages state and sequential execution for the interactive demo."""
+    """Manages state and sequential execution for the interactive demo & V1 dashboard."""
 
     def __init__(self) -> None:
         self.target = VulnerableLabTarget()
         self.attack = IDORAttack()
         self.evidence_store = EvidenceStore()
-        self.policy_gate = PolicyGate(Scope())
+        self.policy_scope = Scope(
+            allowed_domains=["localhost", "127.0.0.1", "lab.local"],
+            allowed_paths=["/", "/api/", "/.env", "/.git/"],
+            max_requests=100,
+        )
+        self.policy_gate = PolicyGate(self.policy_scope)
         self.tutor = AITutor()
         self.current_step = 0
         self.last_result: Any = None
         self.session_token: str = ""
+        self.mode: str = "student"  # "student" or "professional"
+        self.assessment_id: str = "ASM-DEMO-01"
 
     def reset(self, preserve_patch: bool = False) -> dict[str, Any]:
         prev_patch = self.target.is_vulnerable
@@ -39,9 +54,14 @@ class DemoController:
         self.target.is_vulnerable = is_vulnerable
         return {"status": "UPDATED", "is_vulnerable": self.target.is_vulnerable}
 
+    def set_mode(self, mode: str) -> dict[str, Any]:
+        if mode in ("student", "professional"):
+            self.mode = mode
+        return {"status": "UPDATED", "mode": self.mode}
+
     def run_full(self) -> dict[str, Any]:
+        """Runs the interactive IDOR vertical slice (maintains 100% backwards compatibility)."""
         self.reset(preserve_patch=True)
-        # Evaluate policy first
         pol = self.policy_gate.evaluate(
             action_id="idor_test",
             target_path="/api/orders/102",
@@ -59,6 +79,60 @@ class DemoController:
             "policy": {"allowed": pol.allowed, "reason": pol.reason},
             "result": result.to_dict(),
             "target": {"name": self.target.name, "is_vulnerable": self.target.is_vulnerable},
+        }
+
+    def run_module(self, module_name: str) -> dict[str, Any]:
+        """Execute a specific module or all 6 modules on the lab target."""
+        self.reset(preserve_patch=True)
+        results = []
+
+        modules_to_run = []
+        if module_name == "all":
+            modules_to_run = ["headers", "disclosure", "fingerprint", "cors", "exposure", "idor"]
+        else:
+            modules_to_run = [module_name]
+
+        scope = self.policy_scope
+
+        for mod in modules_to_run:
+            if mod == "idor":
+                res = self.attack.execute(self.target, self.evidence_store)
+                results.append(res)
+            elif mod == "headers":
+                m = SecurityHeadersModule()
+                res = m.execute(self.target, store=self.evidence_store, scope=scope, endpoints=["/"])
+                results.append(res)
+            elif mod == "disclosure":
+                m = InformationDisclosureModule()
+                res = m.execute(self.target, store=self.evidence_store, scope=scope, custom_paths=["/.env", "/.git/HEAD"])
+                results.append(res)
+            elif mod == "fingerprint":
+                m = TechnologyFingerprintModule()
+                res = m.execute(self.target, store=self.evidence_store, scope=scope, endpoints=["/"])
+                results.append(res)
+            elif mod == "cors":
+                m = CORSMisconfigurationModule()
+                res = m.execute(self.target, store=self.evidence_store, scope=scope, target_path="/api/user/profile")
+                results.append(res)
+            elif mod == "exposure":
+                m = ExcessiveDataExposureModule()
+                res = m.execute(self.target, store=self.evidence_store, scope=scope, endpoints=["/api/user/profile"])
+                results.append(res)
+
+        all_findings = [f.to_dict() for f in self.evidence_store.get_all_findings()]
+        all_evidence = [e.to_dict() for e in self.evidence_store.get_all_evidence()]
+        integrity_ok, integrity_err = self.evidence_store.verify_integrity()
+
+        return {
+            "module_requested": module_name,
+            "target": {"name": self.target.name, "is_vulnerable": self.target.is_vulnerable},
+            "modules_run": [r.to_dict() for r in results],
+            "total_findings": len(all_findings),
+            "findings": all_findings,
+            "total_evidence": len(all_evidence),
+            "evidence": all_evidence,
+            "integrity_verified": integrity_ok,
+            "integrity_error": integrity_err,
         }
 
     def run_step(self, step_number: int) -> dict[str, Any]:
@@ -154,3 +228,55 @@ class DemoController:
             }
 
         return {"error": f"Unknown step {step_number}"}
+
+    def generate_report(self, format_type: str = "json") -> Any:
+        """Export audit report of current assessment in JSON or Markdown."""
+        findings = [f.to_dict() for f in self.evidence_store.get_all_findings()]
+        evidence = [e.to_dict() for e in self.evidence_store.get_all_evidence()]
+        integrity_ok, integrity_err = self.evidence_store.verify_integrity()
+
+        report_data = {
+            "title": "RAVEN Security Assessment & Vulnerability Report",
+            "assessment_id": self.assessment_id,
+            "target": self.target.name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "target_state": "Vulnerable" if self.target.is_vulnerable else "Remediated",
+            "integrity_chain_valid": integrity_ok,
+            "total_findings": len(findings),
+            "findings": findings,
+            "evidence_count": len(evidence),
+            "evidence": evidence,
+        }
+
+        if format_type.lower() == "markdown":
+            md = [
+                f"# {report_data['title']}",
+                f"**Assessment ID:** `{report_data['assessment_id']}`  ",
+                f"**Target:** {report_data['target']}  ",
+                f"**Timestamp:** {report_data['timestamp']}  ",
+                f"**Target State:** {report_data['target_state']}  ",
+                f"**HMAC Evidence Chain Integrity:** {'✓ VALID & UNBROKEN' if integrity_ok else '✗ INTEGRITY VIOLATION'}  ",
+                "",
+                "---",
+                "",
+                "## Summary of Findings",
+                "",
+            ]
+            if not findings:
+                md.append("No vulnerabilities confirmed. Target is secure or remediated.\n")
+            else:
+                for f in findings:
+                    md.append(f"### [{f.get('severity', 'INFO')}] {f.get('vulnerability_type')}")
+                    md.append(f"- **Endpoint:** `{f.get('endpoint')}`")
+                    md.append(f"- **Status:** `{f.get('status')}`")
+                    md.append(f"- **Evidence IDs:** {', '.join(f.get('evidence_ids', []))}")
+                    md.append(f"- **Root Cause:** {f.get('root_cause', 'N/A')}")
+                    md.append(f"- **Remediation:** `{f.get('remediation', 'N/A')}`\n")
+
+            md.append("## Evidence Chain (Cryptographically Signed & Redacted)\n")
+            for e in evidence:
+                md.append(f"- **[{e['id']}]** `{e['request_method']} {e['request_path']}` $\\to$ HTTP {e['response_status']} | HMAC: `{e.get('chain_hash', '')[:16]}...`")
+
+            return "\n".join(md)
+
+        return report_data

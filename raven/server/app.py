@@ -34,6 +34,15 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send_text(self, text: str, content_type: str = "text/plain", status: int = 200) -> None:
+        raw = text.encode("utf-8")
+        self.send_response(status)
+        self._set_cors_headers()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def _read_json_body(self) -> dict:
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len > 0:
@@ -50,7 +59,11 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
 
         if path == "/api/health":
-            self._send_json({"status": "online", "service": "raven", "version": "0.1.0"})
+            self._send_json({"status": "online", "service": "raven", "version": "1.0.0"})
+            return
+
+        if path == "/api/demo/mode":
+            self._send_json({"mode": controller.mode})
             return
 
         if path == "/api/demo/models":
@@ -64,22 +77,50 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"evidence": items})
             return
 
+        if path == "/api/demo/findings":
+            items = [f.to_dict() for f in controller.evidence_store.get_all_findings()]
+            self._send_json({"findings": items})
+            return
+
         if path == "/api/demo/hints":
             lvl = int(query.get("level", [1])[0])
             self._send_json(controller.tutor.get_progressive_hint(lvl))
+            return
+
+        if path == "/api/demo/student/hint":
+            tier = int(query.get("tier", [1])[0])
+            sess = query.get("session_id", ["default"])[0]
+            hint = controller.tutor.request_student_hint(tier=tier, session_id=sess, evidence_list=controller.evidence_store.get_all_evidence())
+            self._send_json({
+                "tier": hint.tier.value if hasattr(hint.tier, "value") else str(hint.tier),
+                "title": hint.title,
+                "content": hint.content,
+                "unlocked": hint.unlocked,
+                "cooldown_remaining_sec": hint.cooldown_remaining_sec,
+                "reason": hint.reason,
+            })
             return
 
         if path == "/api/demo/explain":
             findings = controller.evidence_store.get_all_findings()
             all_ev = controller.evidence_store.get_all_evidence()
             if not findings:
-                self._send_json({"explanation": "No confirmed findings recorded yet. Run the attack first."})
+                self._send_json({"explanation": "No confirmed findings recorded yet. Run an assessment module first."})
                 return
             self._send_json(controller.tutor.explain_finding(findings[0], all_ev))
             return
 
         if path == "/api/demo/remediation":
             self._send_json(controller.tutor.get_remediation_diff())
+            return
+
+        if path == "/api/demo/report":
+            fmt = query.get("format", ["json"])[0]
+            rep = controller.generate_report(fmt)
+            if fmt.lower() == "markdown":
+                self._send_text(str(rep), content_type="text/markdown; charset=utf-8")
+            else:
+                self._send_json(rep)
             return
 
         # Serve static web frontend
@@ -90,6 +131,20 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/demo/run":
             res = controller.run_full()
+            self._send_json(res)
+            return
+
+        if path == "/api/demo/modules/run":
+            body = self._read_json_body()
+            module_name = body.get("module", "all")
+            res = controller.run_module(module_name)
+            self._send_json(res)
+            return
+
+        if path == "/api/demo/mode":
+            body = self._read_json_body()
+            mode = body.get("mode", "student")
+            res = controller.set_mode(mode)
             self._send_json(res)
             return
 
@@ -145,14 +200,16 @@ class RavenRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
         except Exception as e:
-            self.send_error(500, str(e))
+            self.send_error(500, f"Error reading file: {e}")
 
 
 def run_server(port: int = 8000, host: str = "0.0.0.0") -> None:
-    server = ThreadingHTTPServer((host, port), RavenRequestHandler)
-    print(f"[*] RAVEN Dashboard running at http://localhost:{port}")
-    server.serve_forever()
-
-
-if __name__ == "__main__":
-    run_server()
+    server_address = (host, port)
+    httpd = ThreadingHTTPServer(server_address, RavenRequestHandler)
+    print(f"[*] RAVEN Dashboard running at http://{host}:{port}/")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[*] Server stopped.")
+    finally:
+        httpd.server_close()

@@ -16,7 +16,7 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Top Navigation -->
+    <!-- Top Navigation Header -->
     <header class="app-header">
       <div class="header-brand">
         <div class="brand-logo">
@@ -31,16 +31,26 @@
         </div>
         <div class="brand-subtitle">Reasoning-based Autonomous Vulnerability Exploration Network</div>
       </div>
+
+      <!-- Mode Switcher (Student vs Professional) -->
+      <div class="mode-switch-group">
+        <button id="mode-student" class="mode-btn active">Student Mode</button>
+        <button id="mode-professional" class="mode-btn">Professional Mode</button>
+      </div>
+
+      <!-- Status Pills -->
       <div class="header-status">
         <div class="status-pill" id="target-status"><span class="dot green"></span> Target: FinBank API</div>
         <div class="status-pill" id="policy-status"><span class="dot blue"></span> Policy Gate: Active</div>
         <div class="status-pill" id="patch-status"><span class="dot red"></span> Mode: Vulnerable</div>
       </div>
+
+      <!-- Header Action Buttons -->
       <div class="header-actions">
         <button id="btn-run-full" class="btn btn-primary">
           <span class="btn-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </span> Run Attack
+          </span> <span id="run-btn-text">Run Assessment</span>
         </button>
         <button id="btn-step-next" class="btn btn-secondary">
           <span class="btn-icon">
@@ -52,6 +62,11 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </span> Patch Target
         </button>
+        <button id="btn-export-report" class="btn btn-outline">
+          <span class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </span> Export Report
+        </button>
         <button id="btn-reset" class="btn btn-outline">
           <span class="btn-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
@@ -60,45 +75,98 @@
       </div>
     </header>
 
+    <!-- Transparency Replay Banner (Mandatory for Student Mode under EU AI Act Art. 50) -->
+    <div class="transparency-banner" id="replay-banner">
+      <span class="banner-badge">REPLAY MODE</span>
+      <span>This student view is a replay of a completed assessment. No live security testing is occurring now. [EU AI Act Art. 50]</span>
+    </div>
+
+    <!-- Assessment Module Selection Bar -->
+    <nav class="module-bar" id="module-bar">
+      <div class="module-chip active" data-mod="all">
+        <span>All Modules (Full Assessment)</span>
+        <span class="tag">Suite</span>
+      </div>
+      <div class="module-chip" data-mod="idor">
+        <span>IDOR Attack</span>
+        <span class="tag">Active</span>
+      </div>
+      <div class="module-chip" data-mod="headers">
+        <span>Security Headers &amp; Cookies</span>
+        <span class="tag">Passive</span>
+      </div>
+      <div class="module-chip" data-mod="disclosure">
+        <span>Information Disclosure</span>
+        <span class="tag">Passive</span>
+      </div>
+      <div class="module-chip" data-mod="fingerprint">
+        <span>Tech Fingerprinting</span>
+        <span class="tag">Passive</span>
+      </div>
+      <div class="module-chip" data-mod="cors">
+        <span>CORS Misconfiguration</span>
+        <span class="tag">Active</span>
+      </div>
+      <div class="module-chip" data-mod="exposure">
+        <span>Excessive Data Exposure</span>
+        <span class="tag">Active</span>
+      </div>
+    </nav>
+
     <!-- Main Grid Layout -->
     <main class="dashboard-grid">
-      <!-- Section 1: Live Target Topology & Stepper -->
+      <!-- Section 1: Target Topology & Execution Stepper / Executive Summary -->
       <section class="panel panel-topology">
         <div class="panel-header">
-          <h2 class="panel-title">Target Topology &amp; Execution Stepper</h2>
-          <div class="step-indicator" id="step-indicator">Step 0 of 3: Ready</div>
+          <h2 class="panel-title" id="panel-1-title">Target Topology &amp; Execution Stepper</h2>
+          <div class="step-indicator" id="step-indicator">Ready</div>
         </div>
-        <div class="topology-container">
-          <div class="topo-node" id="node-attacker">
-            <div class="node-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+
+        <!-- Student Mode Topology Stepper -->
+        <div id="student-topology-view">
+          <div class="topology-container">
+            <div class="topo-node" id="node-attacker">
+              <div class="node-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div class="node-name">Attacker</div>
+              <div class="node-sub">usr_alice</div>
             </div>
-            <div class="node-name">Attacker (Alice)</div>
-            <div class="node-sub">usr_alice</div>
+            <div class="topo-connector" id="conn-1"><div class="packet"></div></div>
+            <div class="topo-node" id="node-gateway">
+              <div class="node-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="node-name">Policy Gate</div>
+              <div class="node-sub">NetworkGateway</div>
+            </div>
+            <div class="topo-connector" id="conn-2"><div class="packet"></div></div>
+            <div class="topo-node active" id="node-target">
+              <div class="node-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              </div>
+              <div class="node-name">FinBank API</div>
+              <div class="node-sub">Target Service</div>
+            </div>
+            <div class="topo-connector" id="conn-3"><div class="packet"></div></div>
+            <div class="topo-node" id="node-db">
+              <div class="node-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              </div>
+              <div class="node-name">Database</div>
+              <div class="node-sub">FinBank Records</div>
+            </div>
           </div>
-          <div class="topo-connector" id="conn-1"><div class="packet"></div></div>
-          <div class="topo-node" id="node-gateway">
-            <div class="node-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div class="node-name">Policy Gate</div>
-            <div class="node-sub">Scope Check</div>
+        </div>
+
+        <!-- Professional Mode Executive Summary View (Shown in Pro Mode) -->
+        <div id="pro-summary-view" class="hidden">
+          <div class="exec-summary-bar" id="exec-summary-bar">
+            <!-- Rendered by components.js -->
           </div>
-          <div class="topo-connector" id="conn-2"><div class="packet"></div></div>
-          <div class="topo-node active" id="node-target">
-            <div class="node-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-            </div>
-            <div class="node-name">FinBank Lab API</div>
-            <div class="node-sub">/api/orders/{id}</div>
-          </div>
-          <div class="topo-connector" id="conn-3"><div class="packet"></div></div>
-          <div class="topo-node" id="node-db">
-            <div class="node-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-            </div>
-            <div class="node-name">Target Database</div>
-            <div class="node-sub">Orders #101, #102</div>
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-top: 10px;">
+            <p><strong>Dual-Layer Scope Enforcement:</strong> Outbound requests validated via <code>PolicyGate</code> (domain &amp; path allowlists) and <code>NetworkGateway</code> (deterministic SSRF / RFC1918 blocklist &amp; DNS rebinding IP pinning).</p>
+            <p style="margin-top: 6px;"><strong>Integrity Guarantee:</strong> All evidence items are signed with an unbroken <code>HMAC-SHA256</code> chain. Any manual DB modification fails audit verification.</p>
           </div>
         </div>
       </section>
@@ -107,10 +175,10 @@
       <section class="panel panel-inspector">
         <div class="panel-header">
           <h2 class="panel-title">HTTP Traffic Inspector (Burp View)</h2>
-          <div class="tab-group">
+          <div class="tab-group" id="traffic-tabs">
             <button class="tab-btn active" id="tab-step-1">1: Auth</button>
-            <button class="tab-btn" id="tab-step-2">2: Baseline (101)</button>
-            <button class="tab-btn" id="tab-step-3">3: Tamper (102)</button>
+            <button class="tab-btn" id="tab-step-2">2: Baseline</button>
+            <button class="tab-btn" id="tab-step-3">3: Tamper</button>
           </div>
         </div>
         <div class="inspector-split">
@@ -119,7 +187,7 @@
             <pre class="code-viewer" id="viewer-request">Waiting for execution...</pre>
           </div>
           <div class="inspector-box">
-            <div class="box-title">RESPONSE</div>
+            <div class="box-title">RESPONSE (REDACTED TELEMETRY)</div>
             <pre class="code-viewer" id="viewer-response">Waiting for execution...</pre>
           </div>
         </div>
@@ -132,12 +200,12 @@
           <span class="badge" id="evidence-count">0 Evidence Items</span>
         </div>
         <div class="evidence-list" id="evidence-container">
-          <div class="empty-state">No evidence recorded yet. Execute the attack to capture HTTP observations.</div>
+          <div class="empty-state">No evidence recorded yet. Execute an assessment module to capture HTTP observations.</div>
         </div>
         <div class="finding-card-slot" id="finding-container"></div>
       </section>
 
-      <!-- Section 4: AI Tutor, Progressive Hints & Remediation Diff -->
+      <!-- Section 4: AI Tutor, Progressive Hints & Remediation Hub -->
       <section class="panel panel-tutor">
         <div class="panel-header">
           <h2 class="panel-title">AI Tutor &amp; Remediation Hub</h2>
@@ -148,24 +216,29 @@
           </div>
         </div>
         <div class="tutor-body" id="tutor-body">
+          <!-- Progressive 3-Tier Hint Stepper -->
           <div class="hint-stepper">
             <div class="hint-buttons">
-              <button class="btn btn-sm btn-outline active" id="hint-1">Hint 1</button>
-              <button class="btn btn-sm btn-outline" id="hint-2">Hint 2</button>
-              <button class="btn btn-sm btn-outline" id="hint-3">Solution</button>
+              <button class="btn btn-sm btn-outline active" id="hint-1">Tier 1: Concept</button>
+              <button class="btn btn-sm btn-outline" id="hint-2">Tier 2: Telemetry</button>
+              <button class="btn btn-sm btn-outline" id="hint-3">Tier 3: Exploit</button>
             </div>
             <div class="hint-content-card" id="hint-card">
-              <h4 id="hint-title">Hint 1: Parameter Analysis</h4>
-              <p id="hint-text">Look closely at the request URI `/api/orders/{id}`. Does the application restrict which IDs an authenticated user can request?</p>
+              <h4 id="hint-title">Tier 1: Conceptual Guidance</h4>
+              <p id="hint-text">Select an attack module and click "Run Assessment" to begin learning. You can unlock progressive hints as you explore each vulnerability class.</p>
             </div>
           </div>
+
+          <!-- AI Reasoning Card with Grounding Verification -->
           <div class="ai-explanation-card hidden" id="explain-card">
             <div class="ai-meta">
               <span class="ai-badge" id="ai-model-tag">Ollama Qwen / Deterministic Rules</span>
-              <span class="ai-grounded-tag">[VERIFIED] Grounded in Evidence</span>
+              <span class="ai-grounded-tag" id="ai-grounded-status">[VERIFIED] Evidence Grounded</span>
             </div>
-            <div class="ai-text" id="ai-text">Run the attack module to generate evidence and summon the AI Tutor explanation.</div>
+            <div class="ai-text" id="ai-text">Run an assessment module to generate evidence and summon the AI Tutor explanation.</div>
           </div>
+
+          <!-- Remediation Code Patch Diff -->
           <div class="remediation-diff-view hidden" id="patch-card">
             <div class="diff-split">
               <div class="diff-col vulnerable">
